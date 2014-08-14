@@ -1,0 +1,147 @@
+[
+	{
+		"name": "ese_display_data",
+		"displayName": "Display ESE Data",
+		"taskReset": "no",
+		"serverVersion": "1.0.0 beta",
+		"executionType": "asynchronous",
+		"parameters": [
+			{
+				"name": "d_set",
+				"displayName": "Data set",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "required",
+				"defaultValue": "chirps"
+			},
+			{
+				"name": "d_yr",
+				"displayName": "Year",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "required",
+				"defaultValue": 2013
+			},
+			{
+				"name": "d_mo",
+				"displayName": "Month",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "required",
+				"defaultValue": 1
+			},
+			{
+				"name": "img_url",
+				"displayName": "Image URL ",
+				"dataType": "string",
+				"direction": "output",
+				"parameterType": "required"
+			},
+			{
+				"name": "i_wdim",
+				"displayName": "Image Window Dimensions: width, height ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "i_minv",
+				"displayName": "Image Min Value ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "i_maxv",
+				"displayName": "Image Max Value ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "i_marg",
+				"displayName": "Image Margin ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "i_rgb",
+				"displayName": "Image RGB Table ",
+				"dataType": "long",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "i_x_rng",
+				"displayName": "Image X Range: longitude",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "i_y_rng",
+				"displayName": "Image X Range: latitude ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "mc_cont",
+				"displayName": "MapContinents Continents ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "mc_cntr",
+				"displayName": "MapContinents Countries ",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "mc_lak",
+				"displayName": "MapContinents Lakes",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "mc_riv",
+				"displayName": "MapContinents Rivers",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "mc_usa",
+				"displayName": "MapContinents USA",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+			{
+				"name": "mc_can",
+				"displayName": "MapContinents Canada",
+				"dataType": "string",
+				"direction": "input",
+				"parameterType": "optional"
+			},
+      {
+        "name": "cb",
+        "displayName": "Colorbar",
+        "dataType": "string",
+        "direction": "input",
+        "parameterType": "optional"
+      },
+      {
+        "name": "mg",
+        "displayName": "Mapgrid",
+        "dataType": "string",
+        "direction": "input",
+        "parameterType": "optional"
+      }
+		]
+	}
+]

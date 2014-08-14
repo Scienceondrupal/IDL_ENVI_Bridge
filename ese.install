@@ -1,0 +1,82 @@
+<?php
+/**
+ * IDL/ENVI Bridge Copyright (C) 2014  New Media Studio, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+ /**
+ * @file
+ * ESE installation
+ */
+
+/**
+ * Implements ese install.
+ */
+function ese_install() {
+  // Nothing to install
+} 
+
+/**
+ * Implements ese uninstall.
+ */
+function ese_uninstall() {
+  // Delete variables.
+  variable_del('ese_service');
+  variable_del('ese_data_set');
+  variable_del('ese_data_init_year');
+  variable_del('ese_data_init_month');
+  variable_del('ese_window_dims');
+  variable_del('ese_data_min_value');
+  variable_del('ese_data_max_value');
+  variable_del('ese_window_margin');
+  variable_del('ese_rgb_table');
+  variable_del('ese_lat_range');
+  variable_del('ese_lon_range');
+  variable_del('ese_draw_conts');
+  variable_del('ese_draw_conts_color');
+  variable_del('ese_draw_conts_linestyle');
+  variable_del('ese_draw_conts_thickness');
+  variable_del('ese_draw_countries');
+  variable_del('ese_draw_countries_color');
+  variable_del('ese_draw_countries_linestyle');
+  variable_del('ese_draw_countries_thickness');
+  variable_del('ese_draw_lakes');
+  variable_del('ese_draw_lakes_color');
+  variable_del('ese_draw_lakes_linestyle');
+  variable_del('ese_draw_lakes_thickness');
+  variable_del('ese_draw_rivers');
+  variable_del('ese_draw_rivers_color');
+  variable_del('ese_draw_rivers_linestyle');
+  variable_del('ese_draw_rivers_thickness');
+  variable_del('ese_draw_usa');
+  variable_del('ese_draw_usa_color');
+  variable_del('ese_draw_usa_linestyle');
+  variable_del('ese_draw_usa_thickness');
+  variable_del('ese_draw_canada');
+  variable_del('ese_draw_canada_color');
+  variable_del('ese_draw_canada_linestyle');
+  variable_del('ese_draw_canada_thickness');
+  variable_del('ese_colorbar_show');
+  variable_del('ese_colorbar_pos');
+  variable_del('ese_colorbar_title');
+  variable_del('ese_mapgrid_show');
+  variable_del('ese_mapgrid_color');
+  variable_del('ese_mapgrid_label_color');
+  variable_del('ese_mapgrid_thickness');
+  variable_del('ese_mapgrid_latlon_spacing');
+  variable_del('ese_mapgrid_linestyle');
+  variable_del('ese_mapgrid_label_align');
+  variable_del('ese_debug');
+ }

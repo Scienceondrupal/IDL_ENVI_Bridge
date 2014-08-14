@@ -1,0 +1,993 @@
+<?php
+/**
+ * IDL/ENVI Bridge Copyright (C) 2014  New Media Studio, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/**
+ * @file
+ * Implements ENVI Service Engine RESTful services in Drupal. 
+ *
+ * This is the main module for ESE. This module works in conjunction
+ * with an Exelis ENVI Service Engine to generate maps of data in a
+ * generic way. The goal is to demonstrate how a Drupal module can
+ * work with an ESE instalation, and an IDL coded task, to remove the
+ * need of the Drupal developer from having to write IDL code to display
+ * various data sets on the drupal site. This module allows the design
+ * of the map through the configuration page of the module with many
+ * options provided fro the Image, MapContinents, ColorBar and MapGrid
+ * functions of IDL object graphics. This module requires IDL 8.3 or higher.
+ * 
+ */
+
+/*
+ * Impements hook_help().
+ */
+function ese_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#ese': {
+      $ret_val = '<h3>' . t('About') . '</h3>';
+      $ret_val = '<p>' . t('The ESE module makes it possible to use the ENVI Service Engine in Drupal') . '</p>';
+      return $ret_val;
+      break;
+    }
+  }
+}
+
+
+/**
+ * Implements hook_permission().
+ */
+function ese_permission() {
+  return array(
+    'administer ese' => array(
+      'title' => t('Administer ESE'),
+      'description' => t('Perform administrative tasks on ESE functionality'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_menu().
+ */
+  
+function ese_menu() {
+  $items = array();
+   
+  // Admin configuration group.
+  $items['admin/config/ese'] = array(
+    'title' => 'ESE',
+    'description' => 'Administer ESE',
+    'access arguments' => array('administer ese'),
+  );
+  
+  // Admin configuration - Settings.
+  $items['admin/config/ese/manage'] = array(
+    'title' => 'ESE Map Settings',
+    'description' => 'Manage ESE map settings and configuration.',
+    'access arguments' => array('administer ese'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ese_admin_settings_form'),
+  );
+  
+  // ESE data display node.
+  $items['ese_data'] = array( //was ese_chirps
+    'title' => 'View Data Demo with ESE',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ese_data_form'),
+    'access callback' => TRUE,
+    'type' => MENU_NORMAL_ITEM,
+  );
+  
+  return $items;
+ }
+
+
+/**
+ * Implements hook_admin_settings_form().
+ *
+ * This form implements the configuration page where all the
+ * options for the map are selected by the administrator.
+ */
+function ese_admin_settings_form($node, &$form_state) {
+  
+  //dpm($form_state);
+
+  $form = array();
+
+  $form['overview'] = array(
+    '#markup' => t('This interface allows administrators to manage the ESE Map Settings'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['ese_service'] = array(
+    '#title' => t('ENVI Service Engine URL'),
+    '#description' => t('Enter the ESE URL.(Example:  http://ec2-54-200-57-151.us-west-2.compute.amazonaws.com:8181//ESE/SyncService/ese_display_data/execute)'),
+    '#type' => 'textfield',
+    '#size' => 150,
+    '#required' => TRUE,
+    '#default_value' => variable_get('ese_service', ''),
+  );
+
+  $form['ese_data_set'] = array(
+    '#title' => t('ESE data set to display'),
+    '#description' => t('Enter the data set name.(chirps, NO2)'),
+    '#type' => 'textfield',
+    '#size' => 50,
+    '#required' => TRUE,
+    '#default_value' => variable_get('ese_data_set', ''),
+  );
+
+  $form['ese_data_init_year'] = array(
+    '#title' => t('Initial year of data to display'),
+    '#description' => t('Enter four digit year (2014).'),
+    '#type' => 'textfield',
+    '#size' => 4,
+    '#required' => TRUE,
+    '#default_value' => variable_get('ese_data_init_year', ''),
+  );
+
+  $form['ese_data_init_month'] = array(
+    '#title' => t('Initial month of data to display'),
+    '#type' => 'textfield',
+    '#description' => t('Enter numeric month (1, 2... 12).'),
+    '#size' => 2,
+    '#required' => TRUE,
+    '#default_value' => variable_get('ese_data_init_month', ''),
+  );
+
+  $form['display_options'] = array(
+    '#title' => t('=============== DISPLAY OPTIONS ====================='),
+    '#type' => 'item', 
+  );
+  
+  $form['ese_window_dims'] = array(
+    '#title' => t('WINDOW DIMENSIONS (Optional)'),
+    '#type' => 'textfield',
+    '#description' => t('Set this keyword to a two-element vector of the form [width, height] to specify the window dimensions in pixels. If you do not specify a value for WINDOW DIMENSIONS, IDL will use default values of 512 by 512. (example: 1000,277 & 1000,500).'),
+    '#size' => 15,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_window_dims', ''),
+  );
+
+  $form['ese_data_min_value'] = array(
+    '#title' => t('MINIMUM VALUE (Optional)'),
+    '#type' => 'textfield',
+    '#description' => t('A scalar or array giving the minimum image data value to be used when displaying the data. For byte data the default is 0. For other data types the default is the minimum data value. Tip: If you have a byte data that does not span the entire 0-255 range, you could set the MINIMUM VALUE and MAXIMUM VALUE properties to the minimum and maximum data value to stretch the data to fill the 0-255 range. Or, instead, you could set the COLOR TABLE to a color table that only contains colors that span your data values.'),
+    '#size' => 10,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_data_min_value', ''),
+  );
+
+  $form['ese_data_max_value'] = array(
+    '#title' => t('MAXIMUM VALUE (Optional)'),
+    '#type' => 'textfield',
+    '#description' => t('A scalar or array giving the maximum image data value to be used when displaying the image. For byte data the default is 255. For other data types the default is the maximum data value.( examples: 400, 60)'),
+    '#size' => 10,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_data_max_value', ''),
+  );
+
+  $form['ese_window_margin'] = array(
+    '#title' => t('MARGIN (Optional)'),
+    '#type' => 'textfield',
+    '#description' => t('Set this keyword to the data window margin values. Use a scalar value to set the same margin on all sides, or use a four-element vector [left, bottom, right, top] to specify different margins on each side.
+    Margin values are expressed in normalized units ranging from 0.0 to 0.5. If not set, IDL defaults will apply.'),
+    '#size' => 20,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_window_margin', ''),
+  );
+
+  $form['ese_rgb_tables'] = array(
+    '#type' => 'value',
+    '#value' => array(
+      t('Black/White'),  // 0
+      t('Blue/White'), // 1
+      t('Green/Red/Blue/White'), // 2
+      t('White/Blue'), // 49
+      t('Red Temperature'), // 3
+      t('Standard Gamma-II'), // 5
+      t('Prism'), // 6
+      t('Hue Sat Value'), // 22
+      t('EOS A'), // 26
+      t('EOS B'), // 27
+      t('Blue/Green/Red'), // 25
+      t('Rainbow'), // 13
+      t('Rainbow 18 steps'),  // 38
+      t('Rainbow + White'),  // 39
+      t('Rainbow + Black'),  // 40
+      t('Accent'), // 41
+      t('Pastel 1'), // 44
+      t('Pastel 2'), // 45
+      t('White/Green'), // 50
+      t('White/Purple'), // 51
+      t('Green/Blue'), // 52
+      t('White/Red'), // 59
+      t('White/Black'), // 54
+      t('Orange/Red'), // 56
+      t('Purples'), // 60
+      t('Yellow/Green'), // 63
+      t('Red/Blue Divergent'), // 72
+      t('Purple/Green Divergent'), //68
+      t('Brown/Blue-Green Divergent'), //66
+      t('Red/Yellow/Blue Divergent'), //74
+    )
+  ); 
+   // '#value' => array(0,1,2,49,3,5,6,22,26,27,25,13,38,39,40,41,44,45,50,51,52,59,54,56,60,63,72,68,66,74)
+
+  $form['ese_rgb_table'] = array(
+    '#title' => t('COLOR TABLE'),
+    '#description' => t('Select one of the predefined IDL color tables to display the data with.'),
+    '#type' => 'select',
+    '#options' => $form['ese_rgb_tables']['#value'],
+    '#default_value' => variable_get('ese_rgb_table', 1),
+    '#required' => FALSE,
+  );
+  
+  $form['ese_lat_range'] = array(
+    '#title' => t('LATITUDE RANGE for subsetting latitude range. (Optional)'),
+    '#type' => 'textfield',
+    '#description' => t('Enter comma seperated values for min and max latitudes. The default behavior is to plot the entire data range. (Example, 25,50 & 40,50)'),
+    '#size' => 40,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_lat_range', ''),
+  );
+
+  $form['ese_lon_range'] = array(
+    '#title' => t('LONGITUDE RANGE for subsetting latitude range. (Optional)'),
+    '#type' => 'textfield',
+    '#description' => t('Enter comma seperated values for min and max longitudes. The default behavior is to plot the entire data range. (Example, -125,-90 & -94,-74)'),
+    '#size' => 40,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_lon_range', ''),
+  );
+
+ $form['ese_colors'] = array(
+    '#type' => 'value',
+    '#value' => array(
+      t('Black'), 
+      t('Dark_Grey'),
+      t('Grey'),
+      t('Light_Grey'),
+      t('White_Smoke'),
+      t('White'), 
+      t('Azure'), 
+      t('Ivory'), 
+      t('Bisque'), 
+      t('Pale_Goldenrod'), 
+      t('Khaki'), 
+      t('Dark_Khaki'), 
+      t('Orange'), 
+      t('Tomato'), 
+      t('Firebrick'), 
+      t('Yellow'), 
+      t('Gold'), 
+      t('Orange'), 
+      t('Light_Green'), 
+      t('Green'), 
+      t('Dark_Olive_Green'),
+      t('Forest_Green'),
+      t('Pale_Turquoise'), 
+      t('Aqua'), 
+      t('Medium_Aquamarine'), 
+      t('Teal'),
+      t('Blue'),
+      t('Medium_Blue'),
+      t('Midnight_Blue'),
+      t('Light_Sky_Blue'),
+      t('Light_Steel_Blue'),
+      t('Cyan'),
+      t('Dodger_Blue'),
+    )
+  );
+
+ $form['ese_linestyles'] = array(
+    '#type' => 'value',
+    '#value' => array(
+      t('Solid line'), 
+      t('Dotted'), 
+      t('Dashed'),
+      t('Dash dot'),
+      t('Dash dot dot dot'),
+      t('Long dash'),
+    )
+  );
+
+  $form['mapping_options'] = array(
+    '#title' => t('=============== MAPPING OPTIONS ====================='),
+    '#type' => 'item', 
+  );
+  $form['ese_draw_conts'] = array(
+    '#title' => t('MAP CONTINENTS BOUNDARIES (Optional)'),
+    '#description' => t('When enabled, continent outlines will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_conts', 1),
+  );
+    $form['ese_draw_conts_color'] = array(
+    '#title' => t('Line color'),
+    '#description' => t('Select the color of the boundary outlines. The default is "black".'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_conts_color', 'Black'),
+  );
+    $form['ese_draw_conts_linestyle'] = array(
+    '#title' => t('Line style'),
+    '#description' => t('Select the line style of the boundary outlines.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_conts_linestyle', 'Solid line'),
+  );
+  $form['ese_draw_conts_thickness'] = array(
+    '#title' => t('Line thickness'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 10.0 for line thickness. Default is 1'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_conts_thickness', '1.0'),
+  );
+  
+   $form['l1'] = array(
+    '#title' => t('-------------------------------------------'),
+    '#type' => 'item', 
+  );
+   
+  $form['ese_draw_countries'] = array(
+    '#title' => t('MAP COUNTRY BOUNDARIES (Optional)'),
+    '#description' => t('When enabled, countries outlines will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_countries', 1),
+  );
+    $form['ese_draw_countries_color'] = array(
+    '#title' => t('Line color'),
+    '#description' => t('Select the color of the boundary outlines. The default is "black".'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_countries_color', 'Black'),
+  );
+    $form['ese_draw_countries_linestyle'] = array(
+    '#title' => t('Line style'),
+    '#description' => t('Select the line style of the boundary outlines.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_countries_linestyle', 'Solid line'),
+  );
+  $form['ese_draw_countries_thickness'] = array(
+    '#title' => t('Line thickness'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 10.0 for line thickness. Default is 1'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_countries_thickness', '1.0'),
+  );
+  
+   $form['l2'] = array(
+    '#title' => t('-------------------------------------------'),
+    '#type' => 'item', 
+  );
+   
+  $form['ese_draw_lakes'] = array(
+    '#title' => t('MAP LAKE BOUNDARIES (Optional)'),
+    '#description' => t('When enabled, lakes outlines will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_lakes', 1),
+  );
+    $form['ese_draw_lakes_color'] = array(
+    '#title' => t('Line color'),
+    '#description' => t('Select the color of the boundary outlines. The default is "black".'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_lakes_color', 'Black'),
+  );
+    $form['ese_draw_lakes_linestyle'] = array(
+    '#title' => t('Line style'),
+    '#description' => t('Select the line style of the boundary outlines.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_lakes_linestyle', 'Solid line'),
+  );
+  $form['ese_draw_lakes_thickness'] = array(
+    '#title' => t('Line thickness'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 10.0 for line thickness. Default is 1'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_lakes_thickness', '1.0'),
+  );
+  
+   $form['l3'] = array(
+    '#title' => t('-------------------------------------------'),
+    '#type' => 'item', 
+  );
+   
+  $form['ese_draw_rivers'] = array(
+    '#title' => t('MAP RIVER BOUNDARIES (Optional)'),
+    '#description' => t('When enabled, rivers outlines will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_rivers', 1),
+  );
+    $form['ese_draw_rivers_color'] = array(
+    '#title' => t('Line color'),
+    '#description' => t('Select the color of the boundary outlines. The default is "black".'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_rivers_color', 'Black'),
+  );
+    $form['ese_draw_rivers_linestyle'] = array(
+    '#title' => t('Line style'),
+    '#description' => t('Select the line style of the boundary outlines.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_rivers_linestyle', 'Solid line'),
+  );
+  $form['ese_draw_rivers_thickness'] = array(
+    '#title' => t('Line thickness'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 10.0 for line thickness. Default is 1'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_rivers_thickness', '1.0'),
+  );
+
+   $form['l4'] = array(
+    '#title' => t('-------------------------------------------'),
+    '#type' => 'item', 
+  );
+   
+  $form['ese_draw_usa'] = array(
+    '#title' => t('MAP U.S. STATE BOUNDARIES (Optional)'),
+    '#description' => t('When enabled, usa outlines will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_usa', 1),
+  );
+    $form['ese_draw_usa_color'] = array(
+    '#title' => t('Line color'),
+    '#description' => t('Select the color of the boundary outlines. The default is "black".'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_usa_color', 'Black'),
+  );
+    $form['ese_draw_usa_linestyle'] = array(
+    '#title' => t('Line style'),
+    '#description' => t('Select the line style of the boundary outlines.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_usa_linestyle', 'Solid line'),
+  );
+  $form['ese_draw_usa_thickness'] = array(
+    '#title' => t('Line thickness'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 10.0 for line thickness. Default is 1'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_usa_thickness', '1.0'),
+  );
+  
+   $form['l5'] = array(
+    '#title' => t('-------------------------------------------'),
+    '#type' => 'item', 
+  );
+
+  $form['ese_draw_canada'] = array(
+    '#title' => t('MAP CANADIAN PROVANCE BOUNDARIES (Optional)'),
+    '#description' => t('When enabled, Canadian provence outlines will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_canada', 1),
+  );
+    $form['ese_draw_canada_color'] = array(
+    '#title' => t('Line color'),
+    '#description' => t('Select the color of the boundary outlines. The default is "black".'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_canada_color', 'Black'),
+  );
+    $form['ese_draw_canada_linestyle'] = array(
+    '#title' => t('Line style'),
+    '#description' => t('Select the line style of the boundary outlines.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_canada_linestyle', 'Solid line'),
+  );
+  $form['ese_draw_canada_thickness'] = array(
+    '#title' => t('Line thickness'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 10.0 for line thickness. Default is 1'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_draw_canada_thickness', '1.0'),
+  );
+
+ 
+   $form['cb_options'] = array(
+    '#title' => t('=============== COLORBAR OPTIONS ====================='),
+    '#type' => 'item', 
+  );
+  $form['ese_colorbar_show'] = array(
+    '#title' => t('ENABLE COLORBAR (Optional)'),
+    '#description' => t('When enabled, a colorbar will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_colorbar_show', 1),
+  );
+  $form['ese_colorbar_pos'] = array(
+    '#title' => t('Colorbar position'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a comma seperated value for the left,bottom,right,top side in realitive coordinates, (Example:  0.05,0.15,0.25,0.20. or 0.4,0.1,0.6,0.15'),
+    '#size' => 30,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_colorbar_pos', ''),
+  );
+  $form['ese_colorbar_title'] = array(
+    '#title' => t('Colorbar title'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a title for the colorbar. (mm), (10%5E15%20molcm.%2Fcm%5E2)'),
+    '#size' => 50,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_colorbar_title', ''),
+  );
+
+ 
+   $form['mg_options'] = array(
+    '#title' => t('=============== MAP GRID OPTIONS ====================='),
+    '#type' => 'item', 
+  );
+  $form['ese_mapgrid_show'] = array(
+    '#title' => t(' Enable Map Grid (Optional)'),
+    '#description' => t('When enabled, a Map Grid will be rendered.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_show', 1),
+  );
+    $form['ese_mapgrid_color'] = array(
+    '#title' => t('Line color.'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_color', 'Black'),
+  );
+    $form['ese_mapgrid_label_color'] = array(
+    '#title' => t('Label color.'),
+    '#type' => 'select',
+    '#options' => $form['ese_colors']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_label_color', 'Solid line'),
+  );
+  $form['ese_mapgrid_thickness'] = array(
+    '#title' => t('Line thickness.'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0 and 10 for line thickness.'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_thickness', '1.0'),
+  );
+  $form['ese_mapgrid_latlon_spacing'] = array(
+    '#title' => t('Latitude and longitude line spacing.'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value in degrees for spacing between grid lines.'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_latlon_spacing', '20.0'),
+  );
+    $form['ese_mapgrid_linestyle'] = array(
+    '#title' => t('Line style.'),
+    '#type' => 'select',
+    '#options' => $form['ese_linestyles']['#value'],
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_linestyle', 'Solid line'),
+  );
+  $form['ese_mapgrid_label_align'] = array(
+    '#title' => t('Label alignment.'),
+    '#type' => 'textfield',
+    '#description' => t('Enter a value between 0.0 and 1.0, (0.0 is left justified, 1.0 is right justified.'),
+    '#size' => 5,
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_mapgrid_label_align', '0.5'),
+  );
+  
+
+   $form['misc_options'] = array(
+    '#title' => t('=============== MISCELANEOUS OPTIONS ====================='),
+    '#type' => 'item', 
+  );
+   $form['ese_debug'] = array(
+    '#title' => t(' ======= DEBUG Mode =============='),
+    '#description' => t('When enabled, debugging statements will appear on the page.'),
+    '#type' => 'checkbox',
+    '#required' => FALSE,
+    '#default_value' => variable_get('ese_debug', 1),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#title' => '',
+  );
+  //dpm($form_state['values']);
+
+  return $form;
+}
+
+
+/**
+ * Validates ESE admin settings.
+ */
+function ese_admin_settings_form_validate($form, &$form_state) {
+  // Validatation code here.
+}
+
+/*
+ * Process a validated ESE admin setting submission.
+ *
+ * This form saves the selected options to the database to be used
+ * when a request to the ESE service is made.
+ */
+function ese_admin_settings_form_submit($form, &$form_state) {
+  // Rebuild the form.
+  $form_state['rebuild'] = TRUE;
+  
+  // Save the ESE default variables.
+  variable_set('ese_service', $form_state['values']['ese_service']);
+  variable_set('ese_data_set', $form_state['values']['ese_data_set']);
+  variable_set('ese_data_init_year', $form_state['values']['ese_data_init_year']);
+  variable_set('ese_data_init_month', $form_state['values']['ese_data_init_month']);
+  variable_set('ese_window_dims', $form_state['values']['ese_window_dims']);
+  variable_set('ese_data_min_value', $form_state['values']['ese_data_min_value']);
+  variable_set('ese_data_max_value', $form_state['values']['ese_data_max_value']);
+  variable_set('ese_window_margin', $form_state['values']['ese_window_margin']);
+  variable_set('ese_rgb_table', $form_state['values']['ese_rgb_table']);
+  variable_set('ese_rgb_tables', $form_state['values']['ese_rgb_tables']);
+  variable_set('ese_lon_range', $form_state['values']['ese_lon_range']);
+  variable_set('ese_lat_range', $form_state['values']['ese_lat_range']); 
+    
+  variable_set('ese_colors', $form_state['values']['ese_colors']);
+  variable_set('ese_draw_conts', $form_state['values']['ese_draw_conts']);
+  variable_set('ese_draw_conts_color', $form_state['values']['ese_draw_conts_color']);
+  variable_set('ese_draw_conts_linestyle', $form_state['values']['ese_draw_conts_linestyle']);
+  variable_set('ese_draw_conts_thickness', $form_state['values']['ese_draw_conts_thickness']);
+  
+  variable_set('ese_draw_countries', $form_state['values']['ese_draw_countries']);
+  variable_set('ese_draw_countries_color', $form_state['values']['ese_draw_countries_color']);
+  variable_set('ese_draw_countries_linestyle', $form_state['values']['ese_draw_countries_linestyle']);
+  variable_set('ese_draw_countries_thickness', $form_state['values']['ese_draw_countries_thickness']);
+  
+  variable_set('ese_draw_rivers', $form_state['values']['ese_draw_rivers']);
+  variable_set('ese_draw_rivers_color', $form_state['values']['ese_draw_rivers_color']);
+  variable_set('ese_draw_rivers_linestyle', $form_state['values']['ese_draw_rivers_linestyle']);
+  variable_set('ese_draw_rivers_thickness', $form_state['values']['ese_draw_rivers_thickness']);
+  
+  variable_set('ese_draw_lakes', $form_state['values']['ese_draw_lakes']);
+  variable_set('ese_draw_lakes_color', $form_state['values']['ese_draw_lakes_color']);
+  variable_set('ese_draw_lakes_linestyle', $form_state['values']['ese_draw_lakes_linestyle']);
+  variable_set('ese_draw_lakes_thickness', $form_state['values']['ese_draw_lakes_thickness']);
+  
+  variable_set('ese_draw_usa', $form_state['values']['ese_draw_usa']);
+  variable_set('ese_draw_usa_color', $form_state['values']['ese_draw_usa_color']);
+  variable_set('ese_draw_usa_linestyle', $form_state['values']['ese_draw_usa_linestyle']);
+  variable_set('ese_draw_usa_thickness', $form_state['values']['ese_draw_usa_thickness']);
+  
+  variable_set('ese_draw_canada', $form_state['values']['ese_draw_canada']);
+  variable_set('ese_draw_canada_color', $form_state['values']['ese_draw_canada_color']);
+  variable_set('ese_draw_canada_linestyle', $form_state['values']['ese_draw_canada_linestyle']);
+  variable_set('ese_draw_canada_thickness', $form_state['values']['ese_draw_canada_thickness']);
+  
+  variable_set('ese_colorbar_show', $form_state['values']['ese_colorbar_show']);
+  variable_set('ese_colorbar_pos', $form_state['values']['ese_colorbar_pos']);
+  variable_set('ese_colorbar_title', $form_state['values']['ese_colorbar_title']);
+  
+  variable_set('ese_mapgrid_show', $form_state['values']['ese_mapgrid_show']);
+  variable_set('ese_mapgrid_color', $form_state['values']['ese_mapgrid_color']);
+  variable_set('ese_mapgrid_label_color', $form_state['values']['ese_mapgrid_label_color']);
+  variable_set('ese_mapgrid_thickness', $form_state['values']['ese_mapgrid_thickness']);
+  variable_set('ese_mapgrid_latlon_spacing', $form_state['values']['ese_mapgrid_latlon_spacing']);
+  variable_set('ese_mapgrid_linestyle', $form_state['values']['ese_mapgrid_linestyle']);
+  variable_set('ese_mapgrid_label_align', $form_state['values']['ese_mapgrid_label_align']);
+  
+  variable_set('ese_debug', $form_state['values']['ese_debug']);
+
+  // Notify admin user.
+  drupal_set_message(t('ESE settings saved.'));
+}
+
+
+/**
+ * Implements hook_form_alter().
+ */
+function ese_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'ese_node_form':{
+      $form['#validate'][] = 'eses_ese_node_form_validate';
+      break;
+    }
+  }
+}
+
+
+/**
+ * Validates ESE content type.
+ */
+function eses_ese_node_form_validate($form, &$form_state) {
+  // Validation code here.
+}
+
+/**     
+ * Define a form.
+ *
+ * This form allows the displays the data set as configured
+ * with the options selected in the configuration page. The 
+ * user can browse through the various date of the monthly
+ * data sets and select from a variety of color tables to display
+ * the data with.
+ */
+
+function ese_data_form($form = array(), &$form_state) {
+ 
+  if(variable_get('ese_debug') == 1) { drupal_set_message(t('DEBUG MODE is ON!!!!')); }
+  
+  $form['ese_rgb_table_index'] = array(
+    '#type' => 'value',
+    '#value' => array(0,1,2,49,3,5,6,22,26,27,25,13,38,39,40,41,44,45,50,51,52,59,54,56,60,63,72,68,66,74)
+  );
+  
+  // Set up drop down menus for data browsing
+  $form['years'] = array(
+    '#type' => 'value',
+    '#value' => array(t('2012'), t('2011'), t('2010')),
+  );
+  
+  $form['months'] = array(
+    '#type' => 'value',
+    '#value' => array(t('January'), t('February'), t('March'), t('April'), 
+      t('May'), t('June'), t('July'), t('August'), t('September'), 
+      t('October'), t('November'), t('December')),
+  );
+  
+  $form['year'] = array(
+    '#title' => t('Year:'),
+    '#type' => 'select',
+    '#options' => $form['years']['#value'],
+    '#ajax' => array(
+      'callback' => 'ajax_chirps_ese_img_callback', 
+      'wrapper' => 'chirps_img-div',
+      'method' => 'replace',
+    ) 
+  );
+  
+  $form['month'] = array(
+    '#title' => t('Month:'),
+    '#type' => 'select',
+    '#options' => $form['months']['#value'],
+    '#ajax' => array(
+      'callback' => 'ajax_chirps_ese_img_callback', 
+      'wrapper' => 'chirps_img-div',
+      'method' => 'replace',
+    ) 
+  );
+
+  $form['ese_rgb_table'] = array(
+    '#title' => t('Color Table'),
+    '#description' => t('Select one of the predefined IDL color tables to display the data with.'),
+    '#type' => 'select',
+    '#options' => variable_get('ese_rgb_tables'),
+    '#default_value' => variable_get('ese_rgb_table', 1),
+    '#ajax' => array(
+      'callback' => 'ajax_chirps_ese_img_callback', 
+      'wrapper' => 'chirps_img-div',
+      'method' => 'replace',
+    ) 
+  );
+  
+  // Build argument string to be sent to the ESE service
+  $i_year = isset($form_state['values']['year']) ? $form_state['values']['year'] : 0;
+  $year = isset($form_state['values']['years'][$i_year]) ? $form_state['values']['years'][$i_year] : variable_get('ese_data_init_year');
+  
+  $i_month = isset($form_state['values']['month']) ? $form_state['values']['month'] : variable_get('ese_data_init_month');
+  $i_ese_rgb_table = isset($form_state['values']['ese_rgb_table']) ? $form_state['values']['ese_rgb_table'] : variable_get('ese_rgb_table');
+  $month = $i_month + 1;
+
+  $ese_service = variable_get('ese_service') . '?';
+
+  $args   = "d_set=" . variable_get('ese_data_set');
+  $args = $args . "&d_yr=" . $year;
+  $args = $args . "&d_mo=" .$month;
+  if(variable_get('ese_debug') == 1) { drupal_set_message(t('args: '.$args)); }
+  $args = $args . '&i_wdim='.variable_get('ese_window_dims');
+  
+  $ese_colors= variable_get('ese_colors');
+
+  $v = variable_get('ese_data_min_value');
+  if ($v != NULL) {
+    if(variable_get('ese_debug') == 1) { drupal_set_message(t('adding ese_data_min_value: '.$v)); }
+    $args = $args . '&i_minv=' . $v;
+  }
+  $v = variable_get('ese_data_max_value');
+  if ($v != NULL) {
+    if(variable_get('ese_debug') == 1) { drupal_set_message(t('adding ese_data_max_value: '.$v)); }
+    $args = $args . '&i_maxv='.$v;
+  }
+  $v = variable_get('ese_window_margin');
+  if ($v != NULL) {
+    if(variable_get('ese_debug') == 1) { drupal_set_message(t('adding ese_window_margin: '.$v)); }
+    $args = $args . '&i_marg='.$v;
+  }
+  $v = variable_get('ese_rgb_table');
+  if ($v != NULL) {
+    $args = $args . '&i_rgb='.$form['ese_rgb_table_index']['#value'][$i_ese_rgb_table];
+  }
+  $v = variable_get('ese_lon_range');
+  if ($v != NULL) {
+    $args = $args . '&i_x_rng='.$v;
+  }
+  $v = variable_get('ese_lat_range');
+  if ($v != NULL) {
+    $args = $args . '&i_y_rng='.$v;
+  }
+  
+  // ============ MAPCONTINENTS ========================================
+
+ $form['ese_colors'] = array(
+    '#type' => 'value',
+    '#value' => array(
+      t('Black'), 
+      t('Dark_Grey'),
+      t('Grey'),
+      t('Light_Grey'),
+      t('White_Smoke'),
+      t('White'), 
+      t('Azure'), 
+      t('Ivory'), 
+      t('Bisque'), 
+      t('Pale_Goldenrod'), 
+      t('Khaki'), 
+      t('Dark_Khaki'), 
+      t('Orange'), 
+      t('Tomato'), 
+      t('Firebrick'), 
+      t('Yellow'), 
+      t('Gold'), 
+      t('Orange'), 
+      t('Light_Green'), 
+      t('Green'), 
+      t('Dark_Olive_Green'),
+      t('Forest_Green'),
+      t('Pale_Turquoise'), 
+      t('Aqua'), 
+      t('Medium_Aquamarine'), 
+      t('Teal'),
+      t('Blue'),
+      t('Medium_Blue'),
+      t('Midnight_Blue'),
+      t('Light_Sky_Blue'),
+      t('Light_Steel_Blue'),
+      t('Cyan'),
+      t('Dodger_Blue'),
+    )
+  );
+
+  if ($v = variable_get('ese_draw_conts') == 1) { 
+    $args = $args . '&mc_cont=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_draw_conts_color')];
+    $args = $args .','. variable_get('ese_draw_conts_linestyle');
+    $args = $args .','. variable_get('ese_draw_conts_thickness');
+  }
+
+  if ($v = variable_get('ese_draw_countries') == 1) { 
+    $args = $args . '&mc_cntr=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_draw_countries_color')];
+    $args = $args .','. variable_get('ese_draw_countries_linestyle');
+    $args = $args .','. variable_get('ese_draw_countries_thickness');
+  }
+  if ($v = variable_get('ese_draw_rivers') == 1) { 
+    $args = $args . '&mc_riv=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_draw_rivers_color')];
+    $args = $args .','. variable_get('ese_draw_rivers_linestyle');
+    $args = $args .','. variable_get('ese_draw_rivers_thickness');
+  }
+  if ($v = variable_get('ese_draw_lakes') == 1) { 
+    $args = $args . '&mc_lak=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_draw_lakes_color')];
+    $args = $args .','. variable_get('ese_draw_lakes_linestyle');
+    $args = $args .','. variable_get('ese_draw_lakes_thickness');
+  }
+  if ($v = variable_get('ese_draw_usa') == 1) { 
+    $args = $args . '&mc_usa=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_draw_usa_color')];
+    $args = $args .','. variable_get('ese_draw_usa_linestyle');
+    $args = $args .','. variable_get('ese_draw_usa_thickness');
+  }
+  if ($v = variable_get('ese_draw_canada') == 1) { 
+    $args = $args . '&mc_can=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_draw_canada_color')];
+    $args = $args .','. variable_get('ese_draw_canada_linestyle');
+    $args = $args .','. variable_get('ese_draw_canada_thickness', 1.0);
+  }
+
+
+  // ============ COLORBAR ========================================
+  
+  if ($v = variable_get('ese_colorbar_show') == 1) { 
+    $args = $args . '&cb=';
+    $args = $args . variable_get('ese_colorbar_pos');
+    $args = $args .','. variable_get('ese_colorbar_title');
+  }
+
+  // ============ MAPGRID ========================================
+  
+  if ($v = variable_get('ese_mapgrid_show') == 1) { 
+    $args = $args . '&mg=';
+    $args = $args . $form['ese_colors']['#value'][variable_get('ese_mapgrid_color')];
+    $args = $args .','. $form['ese_colors']['#value'][variable_get('ese_mapgrid_label_color')];
+    $args = $args .','. variable_get('ese_mapgrid_thickness');
+    $args = $args .','. variable_get('ese_mapgrid_latlon_spacing');
+    $args = $args .','. variable_get('ese_mapgrid_linestyle');
+    $args = $args .','. variable_get('ese_mapgrid_label_align');
+  }
+  
+  $request = $ese_service. $args;
+  if(variable_get('ese_debug') == 1) { drupal_set_message(t('request: '.$request)); }
+
+  // Send the request string to the ESE service.
+  $session = curl_init($request);
+  curl_setopt($session, CURLOPT_RETURNTRANSFER, true);
+  $response = curl_exec($session);
+  curl_close($session);
+
+  $result = json_decode($response, true);
+
+  if(variable_get('ese_debug') == 1) { dpm($result); }
+
+  $path = $result['results'][0]['value'];
+     
+  if(variable_get('ese_debug') == 1) { drupal_set_message(t('path: '.$path)); }
+
+  if(variable_get('ese_debug') == 1) { dpm($form_state); }
+
+  $form['data_image'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<div id="chirps_img-div">',
+    '#suffix' => '</div>', 
+    '#markup' => '<p><img src=" ' . $path . '"/> </p>',
+  );
+   
+  //dpm($form_state);
+  return $form;
+}
+
+/*
+ * Process the ajax callback
+ */
+function ajax_chirps_ese_img_callback($form, $form_state) {
+  return $form['data_image'];
+}
+
+
